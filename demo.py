@@ -35,6 +35,7 @@ LED_CHANNEL_ORDER = 'GRB'
 class RGBStatusLed:
     """Single RGB LED helper for boards with one NeoPixel on GPIO 38."""
 
+    # Конструктор: создаёт объект светодиода на GPIO 38, если библиотека machine/neopixel доступна.
     def __init__(self, pin=38):
         self._np = None
         if Pin is not None and neopixel is not None:
@@ -47,6 +48,7 @@ class RGBStatusLed:
         ]
         self._index = 0
 
+    # Записывает цвет в NeoPixel: учитывает порядок каналов RGB/GRB/BRG в зависимости от платы.
     def _write(self, r, g, b):
         if self._np is None:
             return
@@ -60,6 +62,7 @@ class RGBStatusLed:
             self._np[0] = (r, g, b)
         self._np.write()
 
+    # Переключает светодиод на следующий цвет из палитры и сохраняет цикличность.
     def next_color(self):
         r, g, b = self._palette[self._index]
         self._index = (self._index + 1) % len(self._palette)
@@ -69,6 +72,7 @@ class RGBStatusLed:
 class CatApp:
     """Show /cat.ppm with animated saucers and cycle LED color every 5 seconds."""
 
+    # Создаёт главное приложение: инициализирует дисплей, текст подписи, анимацию тарелок и светодиод.
     def __init__(self, display=None):
         self.display = display or ST7789Display(width=320, height=172, rotation=VERTICAL)
         self.display.init()
@@ -130,6 +134,7 @@ class CatApp:
             },
         ]
 
+    # Читает заголовок PPM-файла: проверяет магическое число P6 и получает ширину, высоту и maxval.
     def _read_ppm_header(self, fp):
         magic = fp.readline().strip()
         if magic != b'P6':
@@ -151,6 +156,7 @@ class CatApp:
             return None
         return width, height
 
+    # Преобразует 24-битный RGB в формат RGB565 под конкретный порядок каналов панели.
     def _rgb_to_panel565(self, r, g, b):
         if PPM_CHANNEL_ORDER == 'RGB':
             rr, gg, bb = r, g, b
@@ -168,6 +174,7 @@ class CatApp:
             rr, gg, bb = r, g, b
         return rgb565(rr, gg, bb)
 
+    # Устанавливает один пиксель в строке буфера, учитывая разворот по горизонтали и байтовый порядок RGB565.
     def _set_row_pixel(self, row, width, x, color):
         if x < 0 or x >= width:
             return
@@ -184,6 +191,7 @@ class CatApp:
             row[dst] = hi
             row[dst + 1] = lo
 
+    # Рисует запасное сообщение, если файл /cat.ppm не найден или повреждён.
     def _draw_not_found(self):
         msg = 'IMAGE NOT FOUND'
         x = (self.display.width - len(msg) * 8) // 2
@@ -192,6 +200,7 @@ class CatApp:
         self.graphics.text(x, y, msg, rgb565(255, 255, 255))
         self.graphics.render_to_display(self.display)
 
+    # Загружает картинку PPM в память по строкам, преобразовывая каждый пиксель под формат дисплея.
     def _load_ppm_rows(self, path):
         try:
             os.stat(path)
@@ -230,6 +239,7 @@ class CatApp:
         self._base_rows = rows
         return True
 
+    # Накладывает одну строку с тарелками на текущую строку базы изображения.
     def _apply_saucers_to_row(self, row, y):
         for saucer in self._saucers:
             spans = saucer.get('spans', self._saucer_spans)
@@ -246,6 +256,7 @@ class CatApp:
             for dx in range(start_scaled, end_scaled + 1):
                 self._set_row_pixel(row, self.display.width, x_base + dx, color)
 
+    # Возвращает вычисленную ширину тарелки с учётом масштаба и формы профиля.
     def _saucer_width(self, saucer):
         x_scale = saucer.get('x_scale', 1.0)
         spans = saucer.get('spans', self._saucer_spans)
@@ -258,6 +269,7 @@ class CatApp:
                 max_end = end
         return int((max_end - min_start + 1) * x_scale)
 
+    # Рисует надпись MEINEWELT только в тех строках, где она реально существует в буфере текста.
     def _apply_label_to_row(self, row, y):
         label_row = self._label_graphics._rows.get(y)
         if label_row is None:
@@ -269,6 +281,7 @@ class CatApp:
                 continue
             self._set_row_pixel(row, self.display.width, x, color)
 
+    # Собирает один анимированный кадр: основная картинка + тарелки + подпись, после чего отправляет строку на дисплей.
     def _render_animated_frame(self):
         if self._base_rows is None:
             self._draw_not_found()
@@ -280,6 +293,7 @@ class CatApp:
             self._apply_label_to_row(row, y)
             self.display.write_row(y, row)
 
+    # Двигает тарелки по горизонтали туда-сюда и меняет направление при достижении крайних точек.
     def _update_saucers(self):
         for saucer in self._saucers:
             saucer['x'] += saucer['vx']
@@ -294,17 +308,20 @@ class CatApp:
                 saucer['x'] = max_x
                 saucer['vx'] = -abs(saucer['vx'])
 
+    # Проверяет наличие файла с картинкой и загружает его, если он ещё не был загружен в память.
     def draw_ppm_if_present(self, path):
         if self._base_rows is None:
             return self._load_ppm_rows(path)
         return True
 
+    # Основной метод рендера: либо показывает картинку, либо заменяет её текстом "IMAGE NOT FOUND".
     def render(self):
         if self.draw_ppm_if_present('/cat.ppm'):
             self._render_animated_frame()
         else:
             self._draw_not_found()
 
+    # Главный цикл приложения: обновляет анимацию, каждые 5 секунд меняет цвет светодиода и держит дисплей живым.
     def run(self):
         self.rgb_led.next_color()
         self.led_last_change = time.ticks_ms()
@@ -324,6 +341,7 @@ class CatApp:
             time.sleep_ms(20)
 
 
+# Точка входа: создаёт приложение и запускает его основной цикл на ESP32.
 def main():
     app = CatApp()
     app.run()
