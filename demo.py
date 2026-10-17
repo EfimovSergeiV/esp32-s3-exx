@@ -1,6 +1,5 @@
 import time
 import os
-import random
 
 if not hasattr(time, 'sleep_ms'):
     def _sleep_ms(ms):
@@ -168,23 +167,21 @@ class RGBStatusLed:
         if Pin is not None and neopixel is not None:
             self._np = neopixel.NeoPixel(Pin(pin, Pin.OUT), 1)
         self._palette = [
-            (255, 64, 32),
-            (255, 180, 40),
-            (80, 255, 80),
-            (50, 180, 255),
-            (180, 90, 255),
-            (255, 80, 180),
-            (255, 255, 255),
+            (0, 0, 255),
+            (0, 255, 0),
         ]
+        self._index = 0
 
     def _write(self, r, g, b):
         if self._np is None:
             return
-        self._np[0] = (r, g, b)
+        # On this board the built-in RGB LED uses GRB channel order.
+        self._np[0] = (g, r, b)
         self._np.write()
 
-    def random_color(self):
-        r, g, b = random.choice(self._palette)
+    def next_color(self):
+        r, g, b = self._palette[self._index]
+        self._index = (self._index + 1) % len(self._palette)
         self._write(r, g, b)
 
 
@@ -395,7 +392,7 @@ class CatApp:
         self.graphics.render_to_display(self.display)
 
     def run(self):
-        self.rgb_led.random_color()
+        self.rgb_led.next_color()
         self.led_last_change = time.ticks_ms()
         while True:
             if not self._rendered_once:
@@ -405,7 +402,7 @@ class CatApp:
             now = time.ticks_ms()
             if now - self.led_last_change >= 5000:
                 self.led_last_change = now
-                self.rgb_led.random_color()
+                self.rgb_led.next_color()
 
             time.sleep_ms(300)
 
