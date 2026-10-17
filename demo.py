@@ -116,7 +116,7 @@ class CatApp:
                 'anchor_x': 86,
                 'x': 86,
                 'y': 20,
-                'vx': 2,
+                'vx': 3,
                 'x_scale': 0.78,
                 'spans': self._flat_ufo_spans,
             },
@@ -124,7 +124,7 @@ class CatApp:
                 'anchor_x': 206,
                 'x': 206,
                 'y': 10,
-                'vx': -2,
+                'vx': -3,
                 'x_scale': 0.82,
             },
         ]
@@ -283,8 +283,8 @@ class CatApp:
         for saucer in self._saucers:
             saucer['x'] += saucer['vx']
             w = self._saucer_width(saucer)
-            min_x = saucer['anchor_x'] - 22
-            max_x = min(self.display.width - w - 1, saucer['anchor_x'] + 22)
+            min_x = saucer['anchor_x'] - 26
+            max_x = min(self.display.width - w - 1, saucer['anchor_x'] + 26)
             if saucer['x'] <= min_x:
                 saucer['x'] = min_x
                 saucer['vx'] = abs(saucer['vx'])
