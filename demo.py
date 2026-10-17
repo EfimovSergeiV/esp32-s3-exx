@@ -73,6 +73,12 @@ class CatApp:
         self.display = display or ST7789Display(width=320, height=172, rotation=VERTICAL)
         self.display.init()
         self.graphics = Graphics(self.display.width, self.display.height)
+        self._label_graphics = Graphics(self.display.width, self.display.height)
+        self._label_color = rgb565(255, 255, 255)
+        self._label_text = 'MEINEWELT'
+        self._label_y = self.display.height - 18
+        self._label_x = 12
+        self._label_graphics.text(self._label_x, self._label_y, self._label_text, self._label_color)
         self.rgb_led = RGBStatusLed(pin=38)
         self.led_last_change = 0
 
@@ -92,18 +98,34 @@ class CatApp:
             (10, 37),
             (15, 32),
         )
+        self._flat_ufo_spans = (
+            (18, 31),
+            (14, 35),
+            (10, 39),
+            (8, 41),
+            (6, 43),
+            (5, 44),
+            (6, 43),
+            (8, 41),
+            (11, 38),
+            (15, 34),
+            (20, 29),
+        )
         self._clouds = [
             {
                 'anchor_x': 86,
                 'x': 86,
                 'y': 10,
                 'vx': 1,
+                'x_scale': 0.82,
             },
             {
                 'anchor_x': 206,
                 'x': 206,
                 'y': 20,
                 'vx': -1,
+                'x_scale': 0.78,
+                'spans': self._flat_ufo_spans,
             },
         ]
 
@@ -209,15 +231,42 @@ class CatApp:
 
     def _apply_clouds_to_row(self, row, y):
         for cloud in self._clouds:
+            spans = cloud.get('spans', self._cloud_spans)
             dy = y - cloud['y']
-            if dy < 0 or dy >= len(self._cloud_spans):
+            if dy < 0 or dy >= len(spans):
                 continue
 
-            start, end = self._cloud_spans[dy]
+            start, end = spans[dy]
             x_base = int(cloud['x'])
+            x_scale = cloud.get('x_scale', 1.0)
             color = self._cloud_shadow if dy >= 5 else self._cloud_light
-            for dx in range(start, end + 1):
+            start_scaled = int(start * x_scale)
+            end_scaled = int(end * x_scale)
+            for dx in range(start_scaled, end_scaled + 1):
                 self._set_row_pixel(row, self.display.width, x_base + dx, color)
+
+    def _cloud_width(self, cloud):
+        x_scale = cloud.get('x_scale', 1.0)
+        spans = cloud.get('spans', self._cloud_spans)
+        min_start = spans[0][0]
+        max_end = spans[0][1]
+        for start, end in spans[1:]:
+            if start < min_start:
+                min_start = start
+            if end > max_end:
+                max_end = end
+        return int((max_end - min_start + 1) * x_scale)
+
+    def _apply_label_to_row(self, row, y):
+        label_row = self._label_graphics._rows.get(y)
+        if label_row is None:
+            return
+        for x in range(self.display.width):
+            idx = x * 2
+            color = (label_row[idx] << 8) | label_row[idx + 1]
+            if color == 0:
+                continue
+            self._set_row_pixel(row, self.display.width, x, color)
 
     def _render_animated_frame(self):
         if self._base_rows is None:
@@ -227,13 +276,15 @@ class CatApp:
         for y in range(self.display.height):
             row = bytearray(self._base_rows[y])
             self._apply_clouds_to_row(row, y)
+            self._apply_label_to_row(row, y)
             self.display.write_row(y, row)
 
     def _update_clouds(self):
         for cloud in self._clouds:
             cloud['x'] += cloud['vx']
+            w = self._cloud_width(cloud)
             min_x = cloud['anchor_x'] - 15
-            max_x = cloud['anchor_x'] + 15
+            max_x = min(self.display.width - w - 1, cloud['anchor_x'] + 15)
             if cloud['x'] <= min_x:
                 cloud['x'] = min_x
                 cloud['vx'] = 1
