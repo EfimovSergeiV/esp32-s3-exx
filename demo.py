@@ -1,5 +1,6 @@
 import time
 import os
+import random
 
 if not hasattr(time, 'sleep_ms'):
     def _sleep_ms(ms):
@@ -13,6 +14,13 @@ if not hasattr(time, 'ticks_ms'):
 
 from display import ST7789Display, VERTICAL, rgb565
 from graphics import Graphics, BLACK
+
+try:
+    from machine import Pin
+    import neopixel
+except ImportError:  # pragma: no cover
+    Pin = None
+    neopixel = None
 
 
 CAT_ART = [
@@ -152,6 +160,34 @@ PPM_FLIP_X = True
 PPM_SWAP_565_BYTES = True
 
 
+class RGBStatusLed:
+    """Single RGB LED helper for boards with one NeoPixel on GPIO 38."""
+
+    def __init__(self, pin=38):
+        self._np = None
+        if Pin is not None and neopixel is not None:
+            self._np = neopixel.NeoPixel(Pin(pin, Pin.OUT), 1)
+        self._palette = [
+            (255, 64, 32),
+            (255, 180, 40),
+            (80, 255, 80),
+            (50, 180, 255),
+            (180, 90, 255),
+            (255, 80, 180),
+            (255, 255, 255),
+        ]
+
+    def _write(self, r, g, b):
+        if self._np is None:
+            return
+        self._np[0] = (r, g, b)
+        self._np.write()
+
+    def random_color(self):
+        r, g, b = random.choice(self._palette)
+        self._write(r, g, b)
+
+
 class CatApp:
     """Minimal cat-only demo in horizontal mode (320x172)."""
 
@@ -159,6 +195,8 @@ class CatApp:
         self.display = display or ST7789Display(width=320, height=172, rotation=VERTICAL)
         self.display.init()
         self.graphics = Graphics(self.display.width, self.display.height)
+        self.rgb_led = RGBStatusLed(pin=38)
+        self.led_last_change = 0
         self._rendered_once = False
 
     def draw_background(self):
@@ -357,10 +395,18 @@ class CatApp:
         self.graphics.render_to_display(self.display)
 
     def run(self):
+        self.rgb_led.random_color()
+        self.led_last_change = time.ticks_ms()
         while True:
             if not self._rendered_once:
                 self.render()
                 self._rendered_once = True
+
+            now = time.ticks_ms()
+            if now - self.led_last_change >= 5000:
+                self.led_last_change = now
+                self.rgb_led.random_color()
+
             time.sleep_ms(300)
 
 
