@@ -126,6 +126,7 @@ class CatApp:
                 'y': 10,
                 'vx': -3,
                 'x_scale': 0.82,
+                'left_margin': 15,
             },
         ]
 
@@ -283,7 +284,8 @@ class CatApp:
         for saucer in self._saucers:
             saucer['x'] += saucer['vx']
             w = self._saucer_width(saucer)
-            min_x = saucer['anchor_x'] - 26
+            left_margin = saucer.get('left_margin', 0)
+            min_x = saucer['anchor_x'] - 26 - left_margin
             max_x = min(self.display.width - w - 1, saucer['anchor_x'] + 26)
             if saucer['x'] <= min_x:
                 saucer['x'] = min_x
