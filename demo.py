@@ -67,7 +67,7 @@ class RGBStatusLed:
 
 
 class CatApp:
-    """Show /cat.ppm with animated clouds and cycle LED color every 5 seconds."""
+    """Show /cat.ppm with animated saucers and cycle LED color every 5 seconds."""
 
     def __init__(self, display=None):
         self.display = display or ST7789Display(width=320, height=172, rotation=VERTICAL)
@@ -83,9 +83,9 @@ class CatApp:
         self.led_last_change = 0
 
         self._base_rows = None
-        self._cloud_light = rgb565(245, 249, 255)
-        self._cloud_shadow = rgb565(208, 226, 245)
-        self._cloud_spans = (
+        self._saucer_light = rgb565(245, 249, 255)
+        self._saucer_shadow = rgb565(208, 226, 245)
+        self._saucer_spans = (
             (16, 31),
             (11, 36),
             (7, 40),
@@ -111,21 +111,21 @@ class CatApp:
             (15, 34),
             (20, 29),
         )
-        self._clouds = [
+        self._saucers = [
             {
                 'anchor_x': 86,
                 'x': 86,
-                'y': 10,
-                'vx': 1,
-                'x_scale': 0.82,
+                'y': 20,
+                'vx': 2,
+                'x_scale': 0.78,
+                'spans': self._flat_ufo_spans,
             },
             {
                 'anchor_x': 206,
                 'x': 206,
-                'y': 20,
-                'vx': -1,
-                'x_scale': 0.78,
-                'spans': self._flat_ufo_spans,
+                'y': 10,
+                'vx': -2,
+                'x_scale': 0.82,
             },
         ]
 
@@ -229,25 +229,25 @@ class CatApp:
         self._base_rows = rows
         return True
 
-    def _apply_clouds_to_row(self, row, y):
-        for cloud in self._clouds:
-            spans = cloud.get('spans', self._cloud_spans)
-            dy = y - cloud['y']
+    def _apply_saucers_to_row(self, row, y):
+        for saucer in self._saucers:
+            spans = saucer.get('spans', self._saucer_spans)
+            dy = y - saucer['y']
             if dy < 0 or dy >= len(spans):
                 continue
 
             start, end = spans[dy]
-            x_base = int(cloud['x'])
-            x_scale = cloud.get('x_scale', 1.0)
-            color = self._cloud_shadow if dy >= 5 else self._cloud_light
+            x_base = int(saucer['x'])
+            x_scale = saucer.get('x_scale', 1.0)
+            color = self._saucer_shadow if dy >= 5 else self._saucer_light
             start_scaled = int(start * x_scale)
             end_scaled = int(end * x_scale)
             for dx in range(start_scaled, end_scaled + 1):
                 self._set_row_pixel(row, self.display.width, x_base + dx, color)
 
-    def _cloud_width(self, cloud):
-        x_scale = cloud.get('x_scale', 1.0)
-        spans = cloud.get('spans', self._cloud_spans)
+    def _saucer_width(self, saucer):
+        x_scale = saucer.get('x_scale', 1.0)
+        spans = saucer.get('spans', self._saucer_spans)
         min_start = spans[0][0]
         max_end = spans[0][1]
         for start, end in spans[1:]:
@@ -275,22 +275,22 @@ class CatApp:
 
         for y in range(self.display.height):
             row = bytearray(self._base_rows[y])
-            self._apply_clouds_to_row(row, y)
+            self._apply_saucers_to_row(row, y)
             self._apply_label_to_row(row, y)
             self.display.write_row(y, row)
 
-    def _update_clouds(self):
-        for cloud in self._clouds:
-            cloud['x'] += cloud['vx']
-            w = self._cloud_width(cloud)
-            min_x = cloud['anchor_x'] - 15
-            max_x = min(self.display.width - w - 1, cloud['anchor_x'] + 15)
-            if cloud['x'] <= min_x:
-                cloud['x'] = min_x
-                cloud['vx'] = 1
-            elif cloud['x'] >= max_x:
-                cloud['x'] = max_x
-                cloud['vx'] = -1
+    def _update_saucers(self):
+        for saucer in self._saucers:
+            saucer['x'] += saucer['vx']
+            w = self._saucer_width(saucer)
+            min_x = saucer['anchor_x'] - 22
+            max_x = min(self.display.width - w - 1, saucer['anchor_x'] + 22)
+            if saucer['x'] <= min_x:
+                saucer['x'] = min_x
+                saucer['vx'] = abs(saucer['vx'])
+            elif saucer['x'] >= max_x:
+                saucer['x'] = max_x
+                saucer['vx'] = -abs(saucer['vx'])
 
     def draw_ppm_if_present(self, path):
         if self._base_rows is None:
@@ -312,7 +312,7 @@ class CatApp:
             now = time.ticks_ms()
             if now - last_frame >= 120:
                 last_frame = now
-                self._update_clouds()
+                self._update_saucers()
                 self.render()
 
             if now - self.led_last_change >= 5000:
