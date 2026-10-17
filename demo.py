@@ -51,10 +51,103 @@ CAT_PALETTE = {
     'e': rgb565(245, 200, 170),
 }
 
+HELLO_GLYPHS = {
+    ' ': (
+        '00000',
+        '00000',
+        '00000',
+        '00000',
+        '00000',
+        '00000',
+        '00000',
+    ),
+    'H': (
+        '10001',
+        '10001',
+        '11111',
+        '10001',
+        '10001',
+        '10001',
+        '10001',
+    ),
+    'E': (
+        '11111',
+        '10000',
+        '11110',
+        '10000',
+        '10000',
+        '10000',
+        '11111',
+    ),
+    'L': (
+        '10000',
+        '10000',
+        '10000',
+        '10000',
+        '10000',
+        '10000',
+        '11111',
+    ),
+    'O': (
+        '01110',
+        '10001',
+        '10001',
+        '10001',
+        '10001',
+        '10001',
+        '01110',
+    ),
+    'M': (
+        '10001',
+        '11011',
+        '10101',
+        '10101',
+        '10001',
+        '10001',
+        '10001',
+    ),
+    'I': (
+        '11111',
+        '00100',
+        '00100',
+        '00100',
+        '00100',
+        '00100',
+        '11111',
+    ),
+    'N': (
+        '10001',
+        '11001',
+        '10101',
+        '10011',
+        '10001',
+        '10001',
+        '10001',
+    ),
+    'W': (
+        '10001',
+        '10001',
+        '10001',
+        '10101',
+        '10101',
+        '11011',
+        '10001',
+    ),
+    'T': (
+        '11111',
+        '00100',
+        '00100',
+        '00100',
+        '00100',
+        '00100',
+        '00100',
+    ),
+}
+
 # PPM rendering compatibility switches for this panel.
 # RGB means no channel remap. BRG compensates the current panel pipeline where
 # blue appears as green and green appears as red.
-PPM_CHANNEL_ORDER = 'RGB'
+PPM_CHANNEL_ORDER = 'BGR'
 PPM_FLIP_X = True
 PPM_SWAP_565_BYTES = True
 
@@ -143,6 +236,75 @@ class CatApp:
             rr, gg, bb = r, g, b
         return rgb565(rr, gg, bb)
 
+    def _hello_layout(self):
+        text = 'MEINEWELT'
+        scale = 2
+        spacing = 2
+        char_w = 5 * scale
+        char_h = 7 * scale
+        total_w = len(text) * char_w + (len(text) - 1) * spacing
+        x0 = 20
+        y0 = self.display.height - char_h - 8
+        pad = 4
+        return text, scale, spacing, char_w, char_h, total_w, x0, y0, pad
+
+    def _set_row_pixel(self, row, width, x, color):
+        if x < 0 or x >= width:
+            return
+        dst_x = (width - 1 - x) if PPM_FLIP_X else x
+        dst = dst_x * 2
+        hi = (color >> 8) & 0xFF
+        lo = color & 0xFF
+        if PPM_SWAP_565_BYTES:
+            row[dst] = lo
+            row[dst + 1] = hi
+        else:
+            row[dst] = hi
+            row[dst + 1] = lo
+
+    def _draw_glyph_row(self, row, width, y, base_x, base_y, glyph, color, scale):
+        gy = y - base_y
+        if gy < 0 or gy >= 7 * scale:
+            return
+        glyph_row = gy // scale
+        pattern = glyph[glyph_row]
+        for col_idx, bit in enumerate(pattern):
+            if bit != '1':
+                continue
+            px = base_x + col_idx * scale
+            for sx in range(scale):
+                self._set_row_pixel(row, width, px + sx, color)
+
+    def _apply_hello_to_ppm_row(self, row, y, width):
+        text, scale, spacing, char_w, char_h, total_w, x0, y0, pad = self._hello_layout()
+        shadow = rgb565(0, 0, 0)
+        fg = rgb565(255, 255, 255)
+
+        cursor = x0
+        for ch in text:
+            glyph = HELLO_GLYPHS[ch]
+            self._draw_glyph_row(row, width, y, cursor + 1, y0 + 1, glyph, shadow, scale)
+            self._draw_glyph_row(row, width, y, cursor, y0, glyph, fg, scale)
+            cursor += char_w + spacing
+
+    def _draw_hello_on_graphics(self):
+        text, scale, spacing, char_w, char_h, total_w, x0, y0, pad = self._hello_layout()
+        shadow = rgb565(0, 0, 0)
+        fg = rgb565(255, 255, 255)
+
+        cursor = x0
+        for ch in text:
+            glyph = HELLO_GLYPHS[ch]
+            for row_idx, pattern in enumerate(glyph):
+                for col_idx, bit in enumerate(pattern):
+                    if bit != '1':
+                        continue
+                    px = cursor + col_idx * scale
+                    py = y0 + row_idx * scale
+                    self.graphics.rect(px + 1, py + 1, scale, scale, shadow, fill=True)
+                    self.graphics.rect(px, py, scale, scale, fg, fill=True)
+            cursor += char_w + spacing
+
     def draw_ppm_if_present(self, path):
         try:
             os.stat(path)
@@ -181,6 +343,7 @@ class CatApp:
                         row[dst + 1] = lo
                     x += 1
                     i += 3
+                self._apply_hello_to_ppm_row(row, y, width)
                 self.display.write_row(y, row)
 
         return True
@@ -190,6 +353,7 @@ class CatApp:
             return
         self.draw_background()
         self.draw_pixel_cat(58, 16, scale=4)
+        self._draw_hello_on_graphics()
         self.graphics.render_to_display(self.display)
 
     def run(self):
