@@ -6,8 +6,22 @@ esptool.py erase_flash
 
 esptool --chip esp32s3 --port /dev/ttyACM0 --baud 460800 write-flash 0x0 ESP32_GENERIC_S3-20260824-v1.29.0.bin
 
+
+
+./ImageMagick-7.1.2-34-gcc-x86_64.AppImage cat.png -resize 320x172^ -gravity center -extent 320x172 -strip ppm:cat.ppm
 ```
 
+
+```zsh
+
+mpremote connect /dev/ttyACM0 fs cp main.py :main.py
+mpremote connect /dev/ttyACM0 fs cp display.py :display.py
+mpremote connect /dev/ttyACM0 fs cp graphics.py :graphics.py
+mpremote connect /dev/ttyACM0 fs cp demo.py :demo.py
+mpremote connect /dev/ttyACM0 reset
+
+
+```
 
 
 # ESP32-S3-LCD-1.47B MicroPython port

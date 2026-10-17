@@ -151,9 +151,11 @@ class ST7789Display:
 
         self.write_command(0x36)
         if self.rotation == HORIZONTAL:
-            self.write_data(0x00)
+            self.write_data(0x08)
         else:
-            self.write_data(0x70)
+            # Keep controller memory orientation in default mode and rotate
+            # through set_window() mapping for reliable 320x172 landscape.
+            self.write_data(0x08)
 
         self.write_command(0x3A)
         self.write_data(0x05)
@@ -228,10 +230,12 @@ class ST7789Display:
             y1 += OFFSET_Y
         else:
             x0, y0, x1, y1 = y0, x0, y1, x1
-            x0 += OFFSET_Y
-            x1 += OFFSET_Y
-            y0 += OFFSET_X
-            y1 += OFFSET_X
+            # For a 320x172 logical landscape canvas:
+            # physical_x = logical_y + OFFSET_X, physical_y = logical_x + OFFSET_Y
+            x0 += OFFSET_X
+            x1 += OFFSET_X
+            y0 += OFFSET_Y
+            y1 += OFFSET_Y
 
         self.write_command(0x2A)
         self.write_data(bytes(((x0 >> 8) & 0xFF, x0 & 0xFF, (x1 >> 8) & 0xFF, x1 & 0xFF)))

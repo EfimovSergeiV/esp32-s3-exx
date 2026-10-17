@@ -1,8 +1,8 @@
-from demo import DemoApp
+from demo import CatApp
 
 
 def main():
-    app = DemoApp()
+    app = CatApp()
     app.run()
 
 
