@@ -67,7 +67,7 @@ class RGBStatusLed:
 
 
 class CatApp:
-    """Show /cat.ppm on display and cycle LED color every 5 seconds."""
+    """Show /cat.ppm with animated clouds and cycle LED color every 5 seconds."""
 
     def __init__(self, display=None):
         self.display = display or ST7789Display(width=320, height=172, rotation=VERTICAL)
@@ -75,7 +75,37 @@ class CatApp:
         self.graphics = Graphics(self.display.width, self.display.height)
         self.rgb_led = RGBStatusLed(pin=38)
         self.led_last_change = 0
-        self._rendered_once = False
+
+        self._base_rows = None
+        self._cloud_light = rgb565(245, 249, 255)
+        self._cloud_shadow = rgb565(208, 226, 245)
+        self._cloud_spans = (
+            (16, 31),
+            (11, 36),
+            (7, 40),
+            (4, 43),
+            (2, 45),
+            (0, 47),
+            (1, 46),
+            (3, 44),
+            (6, 41),
+            (10, 37),
+            (15, 32),
+        )
+        self._clouds = [
+            {
+                'anchor_x': 86,
+                'x': 86,
+                'y': 10,
+                'vx': 1,
+            },
+            {
+                'anchor_x': 206,
+                'x': 206,
+                'y': 20,
+                'vx': -1,
+            },
+        ]
 
     def _read_ppm_header(self, fp):
         magic = fp.readline().strip()
@@ -139,24 +169,29 @@ class CatApp:
         self.graphics.text(x, y, msg, rgb565(255, 255, 255))
         self.graphics.render_to_display(self.display)
 
-    def draw_ppm_if_present(self, path):
+    def _load_ppm_rows(self, path):
         try:
             os.stat(path)
         except OSError:
+            self._base_rows = None
             return False
 
+        rows = []
         with open(path, 'rb') as fp:
             header = self._read_ppm_header(fp)
             if header is None:
+                self._base_rows = None
                 return False
 
             width, height = header
             if width != self.display.width or height != self.display.height:
+                self._base_rows = None
                 return False
 
-            for y in range(height):
+            for _ in range(height):
                 src = fp.read(width * 3)
                 if len(src) != width * 3:
+                    self._base_rows = None
                     return False
 
                 row = bytearray(width * 2)
@@ -167,30 +202,73 @@ class CatApp:
                     self._set_row_pixel(row, width, x, c)
                     x += 1
                     i += 3
+                rows.append(row)
 
-                self.display.write_row(y, row)
+        self._base_rows = rows
+        return True
 
+    def _apply_clouds_to_row(self, row, y):
+        for cloud in self._clouds:
+            dy = y - cloud['y']
+            if dy < 0 or dy >= len(self._cloud_spans):
+                continue
+
+            start, end = self._cloud_spans[dy]
+            x_base = int(cloud['x'])
+            color = self._cloud_shadow if dy >= 5 else self._cloud_light
+            for dx in range(start, end + 1):
+                self._set_row_pixel(row, self.display.width, x_base + dx, color)
+
+    def _render_animated_frame(self):
+        if self._base_rows is None:
+            self._draw_not_found()
+            return
+
+        for y in range(self.display.height):
+            row = bytearray(self._base_rows[y])
+            self._apply_clouds_to_row(row, y)
+            self.display.write_row(y, row)
+
+    def _update_clouds(self):
+        for cloud in self._clouds:
+            cloud['x'] += cloud['vx']
+            min_x = cloud['anchor_x'] - 15
+            max_x = cloud['anchor_x'] + 15
+            if cloud['x'] <= min_x:
+                cloud['x'] = min_x
+                cloud['vx'] = 1
+            elif cloud['x'] >= max_x:
+                cloud['x'] = max_x
+                cloud['vx'] = -1
+
+    def draw_ppm_if_present(self, path):
+        if self._base_rows is None:
+            return self._load_ppm_rows(path)
         return True
 
     def render(self):
-        if not self.draw_ppm_if_present('/cat.ppm'):
+        if self.draw_ppm_if_present('/cat.ppm'):
+            self._render_animated_frame()
+        else:
             self._draw_not_found()
 
     def run(self):
         self.rgb_led.next_color()
         self.led_last_change = time.ticks_ms()
+        last_frame = time.ticks_ms()
 
         while True:
-            if not self._rendered_once:
-                self.render()
-                self._rendered_once = True
-
             now = time.ticks_ms()
+            if now - last_frame >= 120:
+                last_frame = now
+                self._update_clouds()
+                self.render()
+
             if now - self.led_last_change >= 5000:
                 self.led_last_change = now
                 self.rgb_led.next_color()
 
-            time.sleep_ms(300)
+            time.sleep_ms(20)
 
 
 def main():
