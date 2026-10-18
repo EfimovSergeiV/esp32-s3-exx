@@ -79,10 +79,11 @@ class CatApp:
         self.graphics = Graphics(self.display.width, self.display.height)
         self._label_graphics = Graphics(self.display.width, self.display.height)
         self._label_color = rgb565(255, 255, 255)
-        self._label_text = 'MEINEWELT'
-        self._label_y = self.display.height - 18
-        self._label_x = 12
-        self._label_graphics.text(self._label_x, self._label_y, self._label_text, self._label_color)
+        self._clock_seconds = 12 * 60 * 60
+        self._clock_last_tick = time.ticks_ms()
+        self._label_y = self.display.height - 18 - 5
+        self._label_x = 25
+        self._update_clock_text()
         self.rgb_led = RGBStatusLed(pin=38)
         self.led_last_change = 0
 
@@ -269,7 +270,17 @@ class CatApp:
                 max_end = end
         return int((max_end - min_start + 1) * x_scale)
 
-    # Рисует надпись MEINEWELT только в тех строках, где она реально существует в буфере текста.
+    # Формирует текущий текст часов в формате HH:MM:SS и рисует его в буфер подписи.
+    def _update_clock_text(self):
+        total = self._clock_seconds
+        hours = total // 3600
+        minutes = (total % 3600) // 60
+        seconds = total % 60
+        self._label_graphics.clear(BLACK)
+        clock_text = f'{hours:02d}:{minutes:02d}:{seconds:02d}'
+        self._label_graphics.text(self._label_x, self._label_y, clock_text, self._label_color, scale=2)
+
+    # Рисует надпись с часами только в тех строках, где она реально существует в буфере текста.
     def _apply_label_to_row(self, row, y):
         label_row = self._label_graphics._rows.get(y)
         if label_row is None:
@@ -281,7 +292,7 @@ class CatApp:
                 continue
             self._set_row_pixel(row, self.display.width, x, color)
 
-    # Собирает один анимированный кадр: основная картинка + тарелки + подпись, после чего отправляет строку на дисплей.
+    # Собирает один анимированный кадр: основная картинка + тарелки + часы, после чего отправляет строку на дисплей.
     def _render_animated_frame(self):
         if self._base_rows is None:
             self._draw_not_found()
@@ -321,7 +332,8 @@ class CatApp:
         else:
             self._draw_not_found()
 
-    # Главный цикл приложения: обновляет анимацию, каждые 5 секунд меняет цвет светодиода и держит дисплей живым.
+    # Главный цикл приложения: обновляет анимацию, каждые 5 секунд меняет цвет светодиода,
+    # а раз в секунду увеличивает время на дисплее от 12:00:00.
     def run(self):
         self.rgb_led.next_color()
         self.led_last_change = time.ticks_ms()
@@ -333,6 +345,11 @@ class CatApp:
                 last_frame = now
                 self._update_saucers()
                 self.render()
+
+            if now - self._clock_last_tick >= 1000:
+                self._clock_last_tick = now
+                self._clock_seconds = (self._clock_seconds + 1) % (24 * 60 * 60)
+                self._update_clock_text()
 
             if now - self.led_last_change >= 5000:
                 self.led_last_change = now

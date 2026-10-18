@@ -137,25 +137,60 @@ class Graphics:
     def text(self, x, y, s, color=WHITE, scale=1):
         if not s:
             return
-        if framebuf is not None:
-            canvas_w = min(self.width, 172)
-            canvas_h = 16
-            canvas = bytearray(canvas_w * canvas_h * 2)
-            fb = framebuf.FrameBuffer(canvas, canvas_w, canvas_h, self.color_mode)
-            fb.fill(self.bg_color)
-            fb.text(s, 0, 0, color)
-            for yy in range(canvas_h):
-                row = self._ensure_row(y + yy)
-                src = yy * canvas_w * 2
-                x0 = max(0, x)
-                x1 = min(self.width, x + canvas_w)
-                for xx in range(x0, x1):
-                    dst = xx * 2
-                    src_idx = (xx - x0) * 2
-                    row[dst:dst + 2] = canvas[src + src_idx:src + src_idx + 2]
-        else:
-            for yy in range(0, 8):
-                self.hline(x, y + yy, max(1, len(s) * 6), color)
+        if scale <= 1:
+            if framebuf is not None:
+                canvas_w = min(self.width, 172)
+                canvas_h = 16
+                canvas = bytearray(canvas_w * canvas_h * 2)
+                fb = framebuf.FrameBuffer(canvas, canvas_w, canvas_h, self.color_mode)
+                fb.fill(self.bg_color)
+                fb.text(s, 0, 0, color)
+                for yy in range(canvas_h):
+                    row = self._ensure_row(y + yy)
+                    src = yy * canvas_w * 2
+                    x0 = max(0, x)
+                    x1 = min(self.width, x + canvas_w)
+                    for xx in range(x0, x1):
+                        dst = xx * 2
+                        src_idx = (xx - x0) * 2
+                        row[dst:dst + 2] = canvas[src + src_idx:src + src_idx + 2]
+            else:
+                for yy in range(0, 8):
+                    self.hline(x, y + yy, max(1, len(s) * 6), color)
+            return
+
+        if framebuf is None:
+            return
+
+        tmp_w = max(1, len(s) * 8)
+        tmp_h = 16
+        tmp = bytearray(tmp_w * tmp_h * 2)
+        tmp_fb = framebuf.FrameBuffer(tmp, tmp_w, tmp_h, self.color_mode)
+        tmp_fb.fill(self.bg_color)
+        tmp_fb.text(s, 0, 0, color)
+
+        for yy in range(tmp_h):
+            for xx in range(tmp_w):
+                if tmp_fb.pixel(xx, yy) == self.bg_color:
+                    continue
+                px = x + xx * scale
+                py = y + yy * scale
+                for dy in range(scale):
+                    for dx in range(scale):
+                        self.pixel(px + dx, py + dy, color)
+
+        # Slightly offset a second pass to make the letters visibly bolder.
+        for yy in range(tmp_h):
+            for xx in range(tmp_w):
+                if tmp_fb.pixel(xx, yy) == self.bg_color:
+                    continue
+                px = x + xx * scale + 1
+                py = y + yy * scale
+                if px < self.width and py < self.height:
+                    for dy in range(scale):
+                        if py + dy >= self.height:
+                            continue
+                        self.pixel(px, py + dy, color)
 
     def draw_panel(self, x, y, w, h, title=None, color=0x1E1E22, border=0xB7B7B7):
         self.rect(x, y, w, h, border, fill=False)
